@@ -1,0 +1,12 @@
+out/
+build/
+dist/
+data/pet-data.json
+.idea/
+.vscode/
+*.iml
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+.sources.tmp
