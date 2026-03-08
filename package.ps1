@@ -68,6 +68,7 @@ if (-not $jpackageExe) {
 }
 
 $jarExe = Join-Path (Split-Path $jpackageExe) "jar.exe"
+$jdepsExe = Join-Path (Split-Path $jpackageExe) "jdeps.exe"
 $buildDir = Join-Path $PSScriptRoot "build"
 $classesDir = Join-Path $buildDir "classes"
 $inputDir = Join-Path $buildDir "jpackage-input"
@@ -105,6 +106,14 @@ if ($LASTEXITCODE -ne 0) {
 
 Copy-Item -Path (Join-Path $PSScriptRoot "data") -Destination (Join-Path $inputDir "data") -Recurse -Force
 
+$runtimeModules = "java.base,java.desktop"
+if (Test-Path $jdepsExe) {
+    $detectedModules = & $jdepsExe --multi-release 17 --ignore-missing-deps --print-module-deps $jarFile
+    if ($LASTEXITCODE -eq 0 -and $detectedModules) {
+        $runtimeModules = $detectedModules.Trim()
+    }
+}
+
 $jpackageArgs = @(
     "--type", "app-image",
     "--name", $appName,
@@ -113,9 +122,19 @@ $jpackageArgs = @(
     "--main-jar", "$appName.jar",
     "--main-class", "com.wwpet.Main",
     "--app-version", $appVersion,
+    "--add-modules", $runtimeModules,
+    "--jlink-options", "--strip-debug --no-man-pages --no-header-files --compress=2",
     "--vendor", "Rosei",
     "--description", "wwPet desktop pet",
-    "--java-options", "-Dfile.encoding=UTF-8"
+    "--java-options", "-Dfile.encoding=UTF-8",
+    "--java-options", "-Dsun.java2d.d3d=false",
+    "--java-options", "-Xms8m",
+    "--java-options", "-Xmx64m",
+    "--java-options", "-Xss256k",
+    "--java-options", "-XX:+UseSerialGC",
+    "--java-options", "-XX:MaxMetaspaceSize=48m",
+    "--java-options", "-XX:ReservedCodeCacheSize=24m",
+    "--java-options", "-XX:TieredStopAtLevel=1"
 )
 if (Test-Path $iconFile) {
     $jpackageArgs += @("--icon", $iconFile)

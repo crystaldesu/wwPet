@@ -44,10 +44,10 @@ public final class PetWindow extends JWindow {
     private final PetController controller;
     private final AssetService assetService;
     private final UiTheme uiTheme;
-    private final SpeechBubblePopup speechBubblePopup;
-    private final PetInfoPopup petInfoPopup;
+    private SpeechBubblePopup speechBubblePopup;
+    private PetInfoPopup petInfoPopup;
     private final PetCanvas petCanvas = new PetCanvas();
-    private final PopupActionMenu contextMenu;
+    private PopupActionMenu contextMenu;
     private final javax.swing.Timer hoverInfoTimer;
     private final javax.swing.Timer animationTimer;
 
@@ -55,21 +55,20 @@ public final class PetWindow extends JWindow {
     private Point pressedWindowPoint;
     private boolean dragging;
     private Boolean appliedAlwaysOnTop;
+    private PetProfile viewProfile;
     private Runnable exitHandler = this::defaultExit;
 
     public PetWindow(PetController controller, AssetService assetService, UiTheme uiTheme) {
         this.controller = controller;
         this.assetService = assetService;
         this.uiTheme = uiTheme;
-        this.speechBubblePopup = new SpeechBubblePopup(this, uiTheme);
-        this.petInfoPopup = new PetInfoPopup(this, uiTheme);
-        this.contextMenu = new PopupActionMenu(this, 176, 30, uiTheme.getMenuFont());
+        this.viewProfile = controller.snapshot();
         this.hoverInfoTimer = new javax.swing.Timer(INFO_POPUP_DELAY_MS, event -> showPetInfoPopupNow());
         this.hoverInfoTimer.setRepeats(false);
 
         setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
         setBackground(new Color(0, 0, 0, 0));
-        setAlwaysOnTop(controller.snapshot().isAlwaysOnTop());
+        setAlwaysOnTop(viewProfile.isAlwaysOnTop());
 
         JPanel content = new JPanel(null);
         content.setOpaque(false);
@@ -80,13 +79,13 @@ public final class PetWindow extends JWindow {
         bindMouseEvents();
 
         animationTimer = new javax.swing.Timer(90, event -> petCanvas.repaint());
-        animationTimer.start();
     }
 
     public void showWindow() {
         prepareWindow();
         setVisible(true);
-        syncAlwaysOnTop(controller.snapshot().isAlwaysOnTop(), true);
+        ensureAnimationRunning();
+        syncAlwaysOnTop(currentViewProfile().isAlwaysOnTop(), true);
         petCanvas.repaint();
     }
 
@@ -95,25 +94,33 @@ public final class PetWindow extends JWindow {
     }
 
     public void showFromTray() {
-        contextMenu.hideMenu();
+        hideContextMenu();
         if (!isVisible()) {
             setVisible(true);
         }
-        syncAlwaysOnTop(controller.snapshot().isAlwaysOnTop(), true);
+        ensureAnimationRunning();
+        syncAlwaysOnTop(currentViewProfile().isAlwaysOnTop(), true);
         toFront();
         repaint();
     }
 
     public void hideToTray() {
-        contextMenu.hideMenu();
-        speechBubblePopup.hideMessage();
+        hideContextMenu();
+        if (speechBubblePopup != null) {
+            speechBubblePopup.hideMessage();
+        }
         hidePetInfoPopup();
+        animationTimer.stop();
         setVisible(false);
     }
 
     public void refreshView() {
-        syncAlwaysOnTop(controller.snapshot().isAlwaysOnTop(), false);
-        if (petInfoPopup.isVisible()) {
+        viewProfile = controller.snapshot();
+        syncAlwaysOnTop(viewProfile.isAlwaysOnTop(), false);
+        if (!isVisible()) {
+            return;
+        }
+        if (petInfoPopup != null && petInfoPopup.isVisible()) {
             petInfoPopup.showPopup(controller.buildTooltipText());
         }
         petCanvas.repaint();
@@ -123,7 +130,7 @@ public final class PetWindow extends JWindow {
         if (!isVisible()) {
             return;
         }
-        speechBubblePopup.showMessage(message);
+        getOrCreateSpeechBubblePopup().showMessage(message);
     }
 
     public void setExitHandler(Runnable exitHandler) {
@@ -132,10 +139,20 @@ public final class PetWindow extends JWindow {
 
     public void shutdownWindow() {
         hoverInfoTimer.stop();
-        contextMenu.dispose();
         animationTimer.stop();
-        petInfoPopup.dispose();
-        speechBubblePopup.dispose();
+        if (contextMenu != null) {
+            contextMenu.hideMenu();
+            contextMenu.dispose();
+            contextMenu = null;
+        }
+        if (petInfoPopup != null) {
+            petInfoPopup.dispose();
+            petInfoPopup = null;
+        }
+        if (speechBubblePopup != null) {
+            speechBubblePopup.dispose();
+            speechBubblePopup = null;
+        }
         dispose();
     }
 
@@ -196,7 +213,7 @@ public final class PetWindow extends JWindow {
 
             @Override
             public void mouseMoved(MouseEvent event) {
-                if (!petInfoPopup.isVisible()) {
+                if (!isPetInfoPopupVisible()) {
                     schedulePetInfoPopup();
                 }
             }
@@ -215,14 +232,14 @@ public final class PetWindow extends JWindow {
             return;
         }
         hidePetInfoPopup();
-        contextMenu.showMenu(buildContextEntries(), event.getLocationOnScreen());
+        getOrCreateContextMenu().showMenu(buildContextEntries(), event.getLocationOnScreen());
     }
 
     private void schedulePetInfoPopup() {
-        if (!isVisible() || contextMenu.isVisible()) {
+        if (!isVisible() || isContextMenuVisible()) {
             return;
         }
-        if (petInfoPopup.isVisible()) {
+        if (isPetInfoPopupVisible()) {
             return;
         }
         hoverInfoTimer.restart();
@@ -230,15 +247,17 @@ public final class PetWindow extends JWindow {
 
     private void showPetInfoPopupNow() {
         hoverInfoTimer.stop();
-        if (!isVisible() || contextMenu.isVisible()) {
+        if (!isVisible() || isContextMenuVisible()) {
             return;
         }
-        petInfoPopup.showPopup(controller.buildTooltipText());
+        getOrCreatePetInfoPopup().showPopup(controller.buildTooltipText());
     }
 
     private void hidePetInfoPopup() {
         hoverInfoTimer.stop();
-        petInfoPopup.hidePopup();
+        if (petInfoPopup != null) {
+            petInfoPopup.hidePopup();
+        }
     }
 
     private List<PopupActionMenu.MenuEntry> buildContextEntries() {
@@ -263,8 +282,8 @@ public final class PetWindow extends JWindow {
         entries.add(PopupActionMenu.MenuEntry.separator());
         entries.add(PopupActionMenu.MenuEntry.selectedAction(
                 "窗口最前",
-                controller.snapshot().isAlwaysOnTop(),
-                () -> controller.toggleAlwaysOnTop(!controller.snapshot().isAlwaysOnTop())
+                controller.isAlwaysOnTop(),
+                () -> controller.toggleAlwaysOnTop(!controller.isAlwaysOnTop())
         ));
         entries.add(PopupActionMenu.MenuEntry.action("隐藏到托盘", this::hideToTray));
         entries.add(PopupActionMenu.MenuEntry.separator());
@@ -280,8 +299,12 @@ public final class PetWindow extends JWindow {
             if (isAlwaysOnTop() != alwaysOnTop) {
                 setAlwaysOnTop(alwaysOnTop);
             }
-            petInfoPopup.syncAlwaysOnTop(alwaysOnTop);
-            speechBubblePopup.syncAlwaysOnTop(alwaysOnTop);
+            if (petInfoPopup != null) {
+                petInfoPopup.syncAlwaysOnTop(alwaysOnTop);
+            }
+            if (speechBubblePopup != null) {
+                speechBubblePopup.syncAlwaysOnTop(alwaysOnTop);
+            }
             if (alwaysOnTop && (changed || forceFront)) {
                 toFront();
                 repaint();
@@ -296,8 +319,53 @@ public final class PetWindow extends JWindow {
         System.exit(0);
     }
 
+    private PetProfile currentViewProfile() {
+        return viewProfile == null ? controller.snapshot() : viewProfile;
+    }
+
+    private PopupActionMenu getOrCreateContextMenu() {
+        if (contextMenu == null) {
+            contextMenu = new PopupActionMenu(this, 176, 30, uiTheme.getMenuFont());
+        }
+        return contextMenu;
+    }
+
+    private PetInfoPopup getOrCreatePetInfoPopup() {
+        if (petInfoPopup == null) {
+            petInfoPopup = new PetInfoPopup(this, uiTheme);
+        }
+        return petInfoPopup;
+    }
+
+    private SpeechBubblePopup getOrCreateSpeechBubblePopup() {
+        if (speechBubblePopup == null) {
+            speechBubblePopup = new SpeechBubblePopup(this, uiTheme);
+        }
+        return speechBubblePopup;
+    }
+
+    private boolean isContextMenuVisible() {
+        return contextMenu != null && contextMenu.isVisible();
+    }
+
+    private boolean isPetInfoPopupVisible() {
+        return petInfoPopup != null && petInfoPopup.isVisible();
+    }
+
+    private void hideContextMenu() {
+        if (contextMenu != null) {
+            contextMenu.hideMenu();
+        }
+    }
+
+    private void ensureAnimationRunning() {
+        if (!animationTimer.isRunning()) {
+            animationTimer.start();
+        }
+    }
+
     private void applyInitialLocation() {
-        PetProfile profile = controller.snapshot();
+        PetProfile profile = currentViewProfile();
         Rectangle workArea = getWorkArea();
         int x = profile.getWindowX();
         int y = profile.getWindowY();
@@ -381,19 +449,18 @@ public final class PetWindow extends JWindow {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
-            PetProfile profile = controller.snapshot();
+            PetProfile profile = currentViewProfile();
             PetState state = profile.getState();
-            BufferedImage petImage = assetService.loadPetImage(state);
+            BufferedImage petImage = assetService.loadPetImage(state, PET_IMAGE_SIZE, PET_IMAGE_SIZE);
             int offsetY = (int) Math.round(Math.sin(System.currentTimeMillis() / 240.0) * 4.0);
 
             g2.setColor(new Color(0, 0, 0, 28));
             g2.fill(new Ellipse2D.Double(18, 124, 84, 18));
 
             if (petImage != null) {
-                int drawSize = PET_IMAGE_SIZE;
                 int x = PET_IMAGE_X;
                 int y = PET_IMAGE_Y + offsetY;
-                g2.drawImage(petImage, x, y, drawSize, drawSize, null);
+                g2.drawImage(petImage, x, y, null);
             } else {
                 paintPlaceholderPet(g2, state, profile.getLevel(), offsetY);
             }

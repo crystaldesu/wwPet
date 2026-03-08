@@ -22,15 +22,17 @@ public final class TrayManager {
     private final AssetService assetService;
     private final PetController controller;
     private final PetWindow petWindow;
-    private final PopupActionMenu trayMenu;
+    private final java.awt.Font menuFont;
 
+    private PopupActionMenu trayMenu;
     private TrayIcon trayIcon;
+    private Runnable exitHandler = this::defaultExit;
 
     public TrayManager(AssetService assetService, PetController controller, PetWindow petWindow, UiTheme uiTheme) {
         this.assetService = assetService;
         this.controller = controller;
         this.petWindow = petWindow;
-        this.trayMenu = new PopupActionMenu(null, 154, 30, uiTheme.getMenuFont());
+        this.menuFont = uiTheme.getMenuFont();
     }
 
     public boolean install() {
@@ -65,22 +67,35 @@ public final class TrayManager {
         }
     }
 
+    public void setExitHandler(Runnable exitHandler) {
+        this.exitHandler = exitHandler == null ? this::defaultExit : exitHandler;
+    }
+
     public void remove() {
-        trayMenu.dispose();
+        if (trayMenu != null) {
+            trayMenu.hideMenu();
+            trayMenu.dispose();
+            trayMenu = null;
+        }
         if (trayIcon == null) {
             return;
         }
-        SystemTray.getSystemTray().remove(trayIcon);
+        try {
+            SystemTray.getSystemTray().remove(trayIcon);
+        } catch (Exception ignored) {
+        }
         trayIcon = null;
     }
 
     private void handleTrayMouse(MouseEvent event) {
         if (event.isPopupTrigger() || event.getButton() == MouseEvent.BUTTON3) {
-            trayMenu.showMenu(buildTrayEntries(), resolveCursorLocation());
+            getOrCreateTrayMenu().showMenu(buildTrayEntries(), resolveCursorLocation());
             return;
         }
         if (event.getButton() == MouseEvent.BUTTON1) {
-            trayMenu.hideMenu();
+            if (trayMenu != null) {
+                trayMenu.hideMenu();
+            }
             petWindow.showFromTray();
         }
     }
@@ -101,16 +116,11 @@ public final class TrayManager {
         entries.add(PopupActionMenu.MenuEntry.separator());
         entries.add(PopupActionMenu.MenuEntry.selectedAction(
                 "窗口最前",
-                controller.snapshot().isAlwaysOnTop(),
-                () -> controller.toggleAlwaysOnTop(!controller.snapshot().isAlwaysOnTop())
+                controller.isAlwaysOnTop(),
+                () -> controller.toggleAlwaysOnTop(!controller.isAlwaysOnTop())
         ));
         entries.add(PopupActionMenu.MenuEntry.separator());
-        entries.add(PopupActionMenu.MenuEntry.action("退出", () -> {
-            remove();
-            petWindow.shutdownWindow();
-            controller.shutdown();
-            System.exit(0);
-        }));
+        entries.add(PopupActionMenu.MenuEntry.action("退出", exitHandler));
         return entries;
     }
 
@@ -123,25 +133,40 @@ public final class TrayManager {
     }
 
     private Image createTrayImage() {
-        BufferedImage appIcon = assetService.loadAppIcon();
+        BufferedImage appIcon = assetService.loadAppIcon(16, 16);
         if (appIcon != null) {
-            return appIcon.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+            return appIcon;
         }
 
-        BufferedImage source = assetService.loadPetImage(PetState.REST);
+        BufferedImage source = assetService.loadPetImage(PetState.REST, 16, 16);
         if (source != null) {
-            return source.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+            return source;
         }
 
-        BufferedImage image = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = image.createGraphics();
-        g2.setColor(new Color(255, 187, 102));
-        g2.fillRoundRect(1, 1, 14, 14, 8, 8);
-        g2.setColor(new Color(45, 50, 60));
-        g2.fillOval(4, 5, 2, 3);
-        g2.fillOval(10, 5, 2, 3);
-        g2.drawArc(5, 7, 5, 4, 180, -180);
+        BufferedImage fallback = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = fallback.createGraphics();
+        g2.setColor(new Color(255, 183, 110));
+        g2.fillRoundRect(1, 1, 14, 14, 6, 6);
+        g2.setColor(new Color(69, 76, 89));
+        g2.drawRoundRect(1, 1, 14, 14, 6, 6);
+        g2.fillOval(4, 5, 2, 2);
+        g2.fillOval(10, 5, 2, 2);
+        g2.drawArc(4, 7, 8, 5, 200, 140);
         g2.dispose();
-        return image;
+        return fallback;
+    }
+
+    private PopupActionMenu getOrCreateTrayMenu() {
+        if (trayMenu == null) {
+            trayMenu = new PopupActionMenu(null, 154, 30, menuFont);
+        }
+        return trayMenu;
+    }
+
+    private void defaultExit() {
+        remove();
+        petWindow.shutdownWindow();
+        controller.shutdown();
+        System.exit(0);
     }
 }

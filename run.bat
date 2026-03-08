@@ -17,5 +17,5 @@ if errorlevel 1 (
 )
 del .sources.tmp >nul 2>nul
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'javaw.exe' -WorkingDirectory '%~dp0' -ArgumentList '-Dfile.encoding=UTF-8','-cp','out','com.wwpet.Main'"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'javaw.exe' -WorkingDirectory '%~dp0' -ArgumentList '-Dfile.encoding=UTF-8','-Dsun.java2d.d3d=false','-Xms8m','-Xmx64m','-Xss256k','-XX:+UseSerialGC','-XX:MaxMetaspaceSize=48m','-XX:ReservedCodeCacheSize=24m','-XX:TieredStopAtLevel=1','-cp','out','com.wwpet.Main'"
 exit /b 0

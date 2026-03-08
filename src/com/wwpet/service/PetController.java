@@ -71,6 +71,10 @@ public final class PetController {
         return profile.getState();
     }
 
+    public boolean isAlwaysOnTop() {
+        return profile.isAlwaysOnTop();
+    }
+
     public boolean isTimedFocusActive() {
         return profile.getState() == PetState.FOCUS && profile.getFocusDeadlineEpochMillis() != null;
     }
