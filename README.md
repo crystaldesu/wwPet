@@ -55,3 +55,7 @@
 ```bat
 dist\wwPet\wwPet.exe
 ```
+
+说明：
+
+- 打包会带上当前项目中的 `data/` 目录

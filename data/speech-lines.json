@@ -1,6 +1,6 @@
 {
   "firstLaunch": [
-    "你好，我是 wwPet，以后一起专注吧。"
+    "你好，我是 {name}，以后一起专注吧。"
   ],
   "restInteractions": [
     "摸摸头，我今天也会陪着你。",
