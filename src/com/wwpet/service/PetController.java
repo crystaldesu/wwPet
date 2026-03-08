@@ -2,6 +2,7 @@ package com.wwpet.service;
 
 import com.wwpet.model.PetProfile;
 import com.wwpet.model.PetState;
+import com.wwpet.model.SpeechLines;
 
 import javax.swing.Timer;
 import java.awt.Point;
@@ -16,18 +17,9 @@ public final class PetController {
     private static final int LEVEL_SECONDS_PER_LEVEL = 3600;
     private static final int FOCUS_MILESTONE_HOURS = 2;
     private static final int AUTOSAVE_INTERVAL_SECONDS = 15;
-    private static final List<String> REST_INTERACTIONS = List.of(
-            "摸摸头，我今天也会陪着你。",
-            "休息也很重要呀。",
-            "我已经准备好继续陪你啦。"
-    );
-    private static final List<String> FOCUS_INTERACTIONS = List.of(
-            "继续冲，我在旁边给你打气。",
-            "专注中的你超厉害。",
-            "再坚持一下，我们离目标更近啦。"
-    );
 
     private final PetDataStore dataStore;
+    private final SpeechLines speechLines;
     private final PetProfile profile;
     private final boolean firstLaunch;
     private final Timer tickTimer;
@@ -39,8 +31,9 @@ public final class PetController {
     private int autosaveCounter = 0;
     private long currentFocusSessionSeconds = 0L;
 
-    public PetController(PetDataStore dataStore) {
+    public PetController(PetDataStore dataStore, SpeechLines speechLines) {
         this.dataStore = dataStore;
+        this.speechLines = speechLines == null ? new SpeechLines() : speechLines.copy();
         PetDataStore.LoadResult loadResult = dataStore.load();
         this.profile = loadResult.profile();
         this.firstLaunch = loadResult.firstLaunch();
@@ -66,7 +59,7 @@ public final class PetController {
 
     public void onWindowShown() {
         if (firstLaunch) {
-            say("你好，我是 wwPet，以后一起专注吧。");
+            say(randomFrom(speechLines.getFirstLaunch()));
         }
     }
 
@@ -91,7 +84,7 @@ public final class PetController {
     }
 
     public void interact() {
-        List<String> pool = profile.getState() == PetState.FOCUS ? FOCUS_INTERACTIONS : REST_INTERACTIONS;
+        List<String> pool = profile.getState() == PetState.FOCUS ? speechLines.getFocusInteractions() : speechLines.getRestInteractions();
         say(randomFrom(pool));
         notifyRefresh();
     }
@@ -102,7 +95,7 @@ public final class PetController {
         profile.setFocusDeadlineEpochMillis(null);
         syncLevel();
         save();
-        say("进入专注状态，我会安静陪着你。");
+        say(randomFrom(speechLines.getFocusStart()));
         notifyRefresh();
     }
 
@@ -113,16 +106,16 @@ public final class PetController {
         profile.setFocusDeadlineEpochMillis(System.currentTimeMillis() + millis);
         syncLevel();
         save();
-        say("专注计时开始啦，我们一起认真一会儿。");
+        say(randomFrom(speechLines.getTimedFocusStart()));
         notifyRefresh();
     }
 
     public void switchToRest() {
-        switchToRest("从专注切回休息状态啦，辛苦啦。");
+        switchToRest(randomFrom(speechLines.getFocusSwitchToRest()));
     }
 
     public void exitFocusEarly() {
-        switchToRest("提前退出专注也没关系，我们稍后再继续。");
+        switchToRest(randomFrom(speechLines.getFocusExitEarly()));
     }
 
     public void toggleAlwaysOnTop(boolean alwaysOnTop) {
@@ -138,7 +131,7 @@ public final class PetController {
     }
 
     public void markSnappedToTaskbar() {
-        say("我已经稳稳停靠在任务栏边上啦。");
+        say(randomFrom(speechLines.getSnapToTaskbar()));
     }
 
     public String buildTooltipText() {
@@ -179,7 +172,7 @@ public final class PetController {
             syncLevel();
             handleFocusMilestone();
             if (profile.getFocusDeadlineEpochMillis() != null && System.currentTimeMillis() >= profile.getFocusDeadlineEpochMillis()) {
-                switchToRest("专注计时完成，先休息一下吧。");
+                switchToRest(randomFrom(speechLines.getFocusTimedComplete()));
             }
         }
 
@@ -196,7 +189,7 @@ public final class PetController {
         long currentStep = profile.getTotalFocusSeconds() / stepSizeSeconds;
         if (currentStep > profile.getLastMilestoneStep()) {
             profile.setLastMilestoneStep(currentStep);
-            say("我们累计专注 " + (currentStep * FOCUS_MILESTONE_HOURS) + " 小时啦。");
+            say(applySpeechPlaceholders(randomFrom(speechLines.getFocusMilestone()), currentStep * FOCUS_MILESTONE_HOURS));
             save();
         }
     }
@@ -266,12 +259,31 @@ public final class PetController {
     }
 
     private void say(String message) {
+        if (message == null || message.isBlank()) {
+            return;
+        }
         speechHook.accept(message);
     }
 
     private String randomFrom(List<String> pool) {
+        if (pool == null || pool.isEmpty()) {
+            return null;
+        }
         int index = ThreadLocalRandom.current().nextInt(pool.size());
-        return pool.get(index);
+        return applySpeechPlaceholders(pool.get(index), null);
+    }
+
+    private String applySpeechPlaceholders(String message, Long hours) {
+        if (message == null) {
+            return null;
+        }
+        String result = message
+                .replace("{name}", profile.getName())
+                .replace("{level}", Integer.toString(profile.getLevel()));
+        if (hours != null) {
+            result = result.replace("{hours}", Long.toString(hours));
+        }
+        return result;
     }
 
     private String formatDuration(long totalSeconds) {

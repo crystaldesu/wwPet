@@ -4,11 +4,16 @@ import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JDialog;
+import javax.swing.Icon;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
+import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.Frame;
 import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsDevice;
@@ -16,6 +21,7 @@ import java.awt.GraphicsEnvironment;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.Window;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -28,6 +34,8 @@ public final class PopupActionMenu extends JDialog {
     private static final Color MENU_BORDER = new Color(210, 216, 226);
     private static final Color MENU_HOVER = new Color(234, 241, 255);
     private static final Color MENU_TEXT = new Color(44, 52, 64);
+    private static final Icon EMPTY_MARK_ICON = new MenuMarkIcon(false);
+    private static final Icon SELECTED_MARK_ICON = new MenuMarkIcon(true);
 
     private final int menuWidth;
     private final int rowHeight;
@@ -102,7 +110,7 @@ public final class PopupActionMenu extends JDialog {
     }
 
     private JButton createButton(MenuEntry entry) {
-        JButton button = new JButton(entry.selected() ? "√ " + entry.label() : entry.label());
+        JButton button = new JButton(entry.label());
         button.setFocusPainted(false);
         button.setBorderPainted(false);
         button.setHorizontalAlignment(JButton.LEFT);
@@ -114,6 +122,8 @@ public final class PopupActionMenu extends JDialog {
         button.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
         button.setMargin(new Insets(0, 0, 0, 0));
         button.setAlignmentX(LEFT_ALIGNMENT);
+        button.setIcon(entry.selected() ? SELECTED_MARK_ICON : EMPTY_MARK_ICON);
+        button.setIconTextGap(6);
 
         Dimension size = new Dimension(menuWidth - 2, rowHeight);
         button.setPreferredSize(size);
@@ -176,6 +186,41 @@ public final class PopupActionMenu extends JDialog {
 
         public static MenuEntry separator() {
             return new MenuEntry("", null, true, false);
+        }
+    }
+
+    private static final class MenuMarkIcon implements Icon {
+        private static final int SIZE = 12;
+
+        private final boolean selected;
+
+        private MenuMarkIcon(boolean selected) {
+            this.selected = selected;
+        }
+
+        @Override
+        public void paintIcon(Component component, Graphics graphics, int x, int y) {
+            if (!selected) {
+                return;
+            }
+
+            Graphics2D g2 = (Graphics2D) graphics.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(MENU_TEXT);
+            g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(x + 2, y + 6, x + 5, y + 9);
+            g2.drawLine(x + 5, y + 9, x + 10, y + 3);
+            g2.dispose();
+        }
+
+        @Override
+        public int getIconWidth() {
+            return SIZE;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return SIZE;
         }
     }
 }

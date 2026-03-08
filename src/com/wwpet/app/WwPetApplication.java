@@ -3,6 +3,7 @@ package com.wwpet.app;
 import com.wwpet.service.AssetService;
 import com.wwpet.service.PetController;
 import com.wwpet.service.PetDataStore;
+import com.wwpet.service.SpeechLinesStore;
 import com.wwpet.service.UiSettingsStore;
 import com.wwpet.ui.PetWindow;
 import com.wwpet.ui.TrayManager;
@@ -27,12 +28,13 @@ public final class WwPetApplication {
 
             Path rootPath = resolveAppRootPath();
             UiSettingsStore settingsStore = new UiSettingsStore(rootPath.resolve("data").resolve("settings.json"));
+            SpeechLinesStore speechLinesStore = new SpeechLinesStore(rootPath.resolve("data").resolve("speech-lines.json"));
             UiTheme uiTheme = UiTheme.from(settingsStore.load(), rootPath);
             UIManager.put("ToolTip.font", uiTheme.getDialogTextFont());
 
             AssetService assetService = new AssetService(rootPath.resolve("data").resolve("assets"));
             PetDataStore dataStore = new PetDataStore(rootPath.resolve("data").resolve("pet-data.json"));
-            PetController controller = new PetController(dataStore);
+            PetController controller = new PetController(dataStore, speechLinesStore.load());
             PetWindow petWindow = new PetWindow(controller, assetService, uiTheme);
             TrayManager trayManager = new TrayManager(assetService, controller, petWindow, uiTheme);
             boolean startHidden = Boolean.getBoolean("wwpet.start.hidden");

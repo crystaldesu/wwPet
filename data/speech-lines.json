@@ -1,0 +1,36 @@
+{
+  "firstLaunch": [
+    "你好，我是 wwPet，以后一起专注吧。"
+  ],
+  "restInteractions": [
+    "摸摸头，我今天也会陪着你。",
+    "休息也很重要呀。",
+    "我已经准备好继续陪你啦。"
+  ],
+  "focusInteractions": [
+    "继续冲，我在旁边给你打气。",
+    "专注中的你超厉害。",
+    "再坚持一下，我们离目标更近啦。"
+  ],
+  "snapToTaskbar": [
+    "我已经稳稳停靠在任务栏边上啦。"
+  ],
+  "focusStart": [
+    "进入专注状态，我会安静陪着你。"
+  ],
+  "timedFocusStart": [
+    "专注计时开始啦，我们一起认真一会儿。"
+  ],
+  "focusSwitchToRest": [
+    "从专注切回休息状态啦，辛苦啦。"
+  ],
+  "focusExitEarly": [
+    "提前退出专注也没关系，我们稍后再继续。"
+  ],
+  "focusTimedComplete": [
+    "专注计时完成，先休息一下吧。"
+  ],
+  "focusMilestone": [
+    "我们累计专注 {hours} 小时啦。"
+  ]
+}
